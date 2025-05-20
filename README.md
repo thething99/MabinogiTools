@@ -12,9 +12,10 @@
 프로그램이 구멍을 인식하지 못한다면 마비노기 모바일 게임의 창 크기를 더 키워본다.
 
 6. 이제 다른 프로그램, 게임 등을 하며 딴짓을 한다.
-![image](https://github.com/user-attachments/assets/b2436a8d-9dd3-4eb4-9204-f6ba692b1776)
+![image](https://github.com/user-attachments/assets/3725fbb8-4364-406e-83d8-7b72e67faf2b)
 다른 프로그램이나 게임으로 마비노기 게임을 덮어도 된다.  
 단, 마비노기 게임을 최소화 하거나 모니터 밖으로 밀어버리면 프로그램이 인식을 못한다!
+
 ![image](https://github.com/user-attachments/assets/dabe8884-5a51-4277-b529-1177cc362b87)
 심층 구멍이 발견될 경우 삐삐 소리가 나며 알림이 뜬다.
 
