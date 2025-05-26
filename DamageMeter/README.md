@@ -7,6 +7,8 @@ redpill.py -> 데미지 프린터
 searchpill.py -> 패킷 프린터  
   
 ![image](https://github.com/user-attachments/assets/b1d0a229-0e7f-4039-9113-2bb16ad191d7)  
+![image](https://github.com/user-attachments/assets/9787dea0-0b6c-4402-8018-730fe36ed136)  
+
   
   
 기본적인 패킷 구성   
