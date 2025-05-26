@@ -25,7 +25,29 @@ dmgskill = []
 dmgburn = []
 starttime = 0
 
-skilllist = [ # 인식 가능한 스킬 리스트, 직업별로 추가 필요
+
+
+joblist = [ # 인식 가능한 직업 및 스킬 앞자리 리스트, 추가 필요
+    'RangeDefaultAttack',
+    'MeleeDefaultAttack',
+    'FireMage_',
+    'Idle',
+    'Elemental_Common_',
+    'GreatSwordWarrior_',
+    'Arbalist_',
+    'ChargingFist_',
+    'Fighter_ThrustKick',
+    'HighMage_',
+    'IceMage_',
+    'SwordMaster_',
+    'NoviceWarrior_',
+    'ExpertWarrior_',
+    'Monk_Skill_',
+    'LongBowMan_',
+    'HighArcher_',
+]
+
+skilllist = [ # 인식 가능한 스킬 리스트, 직업별로 추가 필요, 오작동이 많을 경우에만 사용
     'RangeDefaultAttack_1',
     'RangeDefaultAttack_2',
     'RangeDefaultAttack_3',
@@ -110,26 +132,6 @@ skilllist = [ # 인식 가능한 스킬 리스트, 직업별로 추가 필요
     'HighArcher_EscapeStep',
     'HighArcher_ArrowRevolver',
 
-]
-
-joblist = [ # 인식 가능한 직업 및 스킬 앞자리 리스트, 추가 필요
-    'RangeDefaultAttack',
-    'MeleeDefaultAttack',
-    'FireMage_',
-    'Idle',
-    'Elemental_Common_',
-    'GreatSwordWarrior_',
-    'Arbalist_',
-    'ChargingFist_',
-    'Fighter_ThrustKick',
-    'HighMage_',
-    'IceMage_',
-    'SwordMaster_',
-    'NoviceWarrior_',
-    'ExpertWarrior_',
-    'Monk_Skill_',
-    'LongBowMan_',
-    'HighArcher_',
 ]
 
 blacklist = [
@@ -304,7 +306,7 @@ def tryprint(raw_data):
                     print(x + " : " + str(y[1]))
     return
 
-    for x in skilllist: # 데미지 출력, 스킬 인식
+    for x in skilllist: # 데미지 출력, 스킬 인식, 오작동이 많을 경우에만 사용
         if toutf16le(x) in raw_data: 
             detec = True
             damages = getdamage(raw_data, toutf16le(x))
