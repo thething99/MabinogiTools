@@ -9,9 +9,23 @@ redpill.py -> 데미지 프린터
 searchpill.py -> 패킷 프린터  
   
 ![image](https://github.com/user-attachments/assets/b1d0a229-0e7f-4039-9113-2bb16ad191d7)  
-![image](https://github.com/user-attachments/assets/9787dea0-0b6c-4402-8018-730fe36ed136)  
-
+Start 누르고 데미지 입히면 기록 시작  
+최소, 최대, 평균 데미지는 지속피해를 제외하고 계산함  
   
+  
+![image](https://github.com/user-attachments/assets/9787dea0-0b6c-4402-8018-730fe36ed136)  
+스킬 이름 찾는 법  
+R - 캡처 시작, S - 캡처 중지, E - 캡처 초기화, RE - 초기화 후 다시 캡처 시작  
+1. 분석 코드 실행  
+2. 스킬 사용 후 데미지 확인  
+3. S 입력 후 엔터로 캡처 중지  
+4. 확인한 데미지 입력  
+5. 정상적으로 캡처가 됐다면 캡처된 데이터와 스킬 이름이 출력됨  
+이후 반복  
+  
+    
+
+
   
 기본적인 패킷 구성   
 [스킬코드]+[데미지]   
