@@ -6,6 +6,9 @@
 redpill.py -> 데미지 프린터  
 searchpill.py -> 패킷 프린터  
   
+![image](https://github.com/user-attachments/assets/b1d0a229-0e7f-4039-9113-2bb16ad191d7)  
+  
+  
 기본적인 패킷 구성   
 [스킬코드]+[데미지]   
   
