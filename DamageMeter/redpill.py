@@ -24,27 +24,47 @@ dmgskill = []
 dmgburn = []
 starttime = 0
 
+joblist = [  # 인식 가능한 직업 및 스킬 앞자리 리스트, 추가 필요
+    'RangeDefaultAttack',   # 원거리 기본 공격
+    'MeleeDefaultAttack',   # 근거리 기본 공격
+    'RangeAttack',          # 범위 공격? 뒤에 속성이 따라붙음(Fire, Ice, Poison, Mental...)
 
-
-joblist = [ # 인식 가능한 직업 및 스킬 앞자리 리스트, 추가 필요
-    'RangeDefaultAttack',
-    'MeleeDefaultAttack',
-    'FireMage_',
+    'Elemental',            # 원소 공격
     'Idle',
-    'Elemental_',
-    'GreatSwordWarrior_',
-    'Arbalist_',
-    'ChargingFist_',
-    'Fighter_',
-    'HighMage_',
-    'IceMage_',
-    'SwordMaster_',
-    'NoviceWarrior_',
-    'ExpertWarrior_',
-    'Monk_',
-    'LongBowMan_',
-    'HighArcher_',
-    'Priest_',
+
+    # 전사 계열
+    'ExpertWarrior',        # 전사
+    'NoviceWarrior',        # 전사
+    'GreatSwordWarrior',    # 대검전사
+    'SwordMaster',          # 검술사
+
+    # 궁수 계열
+    'HighArcher',           # 궁수
+    'ExpertArcher'          # 궁수
+    'Arbalist',             # 석궁사수
+    'LongBowMan',           # 장궁병
+    'LongBow'               # 장궁병(윙스큐어, 크래시샷 일부)
+
+    # 마법사 계열
+    'HighMage',             # 마법사
+    'FireMage',             # 화염술사
+    'IceMage',              # 빙결술사
+
+    # 힐러 계열
+    'Healer'                # 힐러
+    'Priest',               # 사제
+    'Monk',                 # 수도사
+
+    # 음유시인 계열
+    'Bard',                 # 음유시인
+    'Dancer',               # 댄서
+    'BattleMusician'        # 악사
+
+    # 도적 계열
+    'HighThief',            # 도적
+    'Fighter',              # 격투가
+    'DualBlades',           # 듀얼블레이드
+
 ]
 
 blacklist = [
