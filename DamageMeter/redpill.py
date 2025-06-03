@@ -68,6 +68,8 @@ joblist = [  # 인식 가능한 직업 및 스킬 앞자리 리스트, 추가 �
 
 ]
 
+utf16_joblist = [x.encode('utf-16le') for x in joblist]
+
 blacklist = [
     '_Backdraft_Trail_',
     'FireStorm_Tie',
@@ -76,6 +78,9 @@ blacklist = [
     'LoopAI',
     '_Buff_End',
 ]
+
+utf16_blacklist = [x.encode('utf-16le') for x in blacklist]
+
 
 def input_listener():
     global packetprocess
@@ -197,12 +202,14 @@ def get_damages(data: bytes, pattern_bytes) -> list[tuple[str, int]]:
 def tryprint(raw_data):
     global dmgskill
     global dmgburn
-    
-    if len(raw_data) < 24: return # 길이 필터링
-    #if not matchdata(raw_data): return # 헤더 필터링
-    for x in blacklist:
-        if toutf16le(x) in raw_data: return # str 필터링
-        ''
+
+    if len(raw_data) < 24:
+        return  # 길이 필터링
+    # if not matchdata(raw_data): return # 헤더 필터링
+    for encoded_blacklist in utf16_blacklist:
+        if encoded_blacklist in raw_data:
+            return  # str 필터링
+
     # int 변환, hex보다 비교가 쪼끔 쉬움
     '''
     for i in range(0, len(raw_data), 4):
@@ -220,13 +227,15 @@ def tryprint(raw_data):
             dmgburn.append(x)
             print('burn : ' + str(x))
 
-    for x in joblist: # 데미지 출력, 직업 인식
-        if toutf16le(x) in raw_data: 
-            damages = get_damages(raw_data, toutf16le(x))
-            for skill_name, damage in damages:
-                if damage > 9:
-                    dmgskill.append(damage)
-                    print(f"{skill_name} : {damage}")
+    damage_list = []
+    for encoded_job in utf16_joblist:
+        if encoded_job in raw_data:
+            damage_list.extend(get_damages(raw_data, encoded_job))
+
+    for skill_name, damage in damage_list:
+        if damage > 9:
+            dmgskill.append(damage)
+            print(f"{skill_name} : {damage}")
     return
 
 class DamageTrackerApp: #챗지피티 최고
