@@ -44,10 +44,10 @@ joblist = [  # 인식 가능한 직업 및 스킬 앞자리 리스트, 추가 �
 
     # 궁수 계열
     'HighArcher',           # 궁수
-    'ExpertArcher'          # 궁수
+    'ExpertArcher',          # 궁수
     'Arbalist',             # 석궁사수
     'LongBowMan',           # 장궁병
-    'LongBow'               # 장궁병(윙스큐어, 크래시샷 일부)
+    'LongBow',               # 장궁병(윙스큐어, 크래시샷 일부)
 
     # 마법사 계열
     'HighMage',             # 마법사
@@ -55,14 +55,14 @@ joblist = [  # 인식 가능한 직업 및 스킬 앞자리 리스트, 추가 �
     'IceMage',              # 빙결술사
 
     # 힐러 계열
-    'Healer'                # 힐러
+    'Healer',                # 힐러
     'Priest',               # 사제
     'Monk',                 # 수도사
 
     # 음유시인 계열
     'Bard',                 # 음유시인
     'Dancer',               # 댄서
-    'BattleMusician'        # 악사
+    'BattleMusician',        # 악사
 
     # 도적 계열
     'HighThief',            # 도적
