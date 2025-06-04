@@ -20,6 +20,8 @@ capture_lock = threading.Lock()
 
 my_ip = get_if_addr(conf.iface)
 
+ver = 'v25.06.04'
+
 PORT = 16000
 
 dmgskill = []
@@ -256,7 +258,7 @@ def tryprint(raw_data):
 class DamageTrackerApp: #챗지피티 최고
     def __init__(self, root):
         self.root = root
-        self.root.title("Redpill beta")
+        self.root.title("Redpill beta " + ver)
         self.root.geometry("300x400")
         self.root.resizable(False, False)
 
