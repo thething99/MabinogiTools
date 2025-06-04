@@ -1,5 +1,5 @@
-#모비노기 데미지 프린터 v25.05.26
-#미완성 코드입니다!!!!
+#모비노기 데미지 프린터 v25.06.04
+#아직 부족한 부분이 많습니다. 이슈 발생시 제보 주세요.
 
 
 import tkinter as tk
@@ -13,6 +13,7 @@ import threading
 import queue
 import os
 import time
+import brotli
 
 packetprocess = queue.Queue()
 capture_lock = threading.Lock()
@@ -199,6 +200,26 @@ def get_damages(data: bytes, pattern_bytes) -> list[tuple[str, int]]:
     
     return results
 
+def extractpkt(data: bytes):
+    # 00 80 aa aa aa ea
+    rslts = []
+    pattern = b'\x00\x80\xaa\xaa\xaa\xea'
+    for match in re.finditer(pattern, data, flags=re.DOTALL):
+        match_start = match.start() - 3
+        if match_start - 5 < 0:
+            continue
+        match_len = struct.unpack('<I', data[match_start -5 :match_start-1])[0]
+        if match_len > len(data) - match_start:
+            continue   
+        msegment = data[match_start:match_start + match_len]
+        try:
+            decompress = brotli.decompress(msegment)
+            rslts.append(decompress)
+        except Exception as e:
+            print(f"Decompression error")
+            continue
+    return rslts
+
 def tryprint(raw_data):
     global dmgskill
     global dmgburn
@@ -210,17 +231,6 @@ def tryprint(raw_data):
         if encoded_blacklist in raw_data:
             return  # str 필터링
 
-    # int 변환, hex보다 비교가 쪼끔 쉬움
-    '''
-    for i in range(0, len(raw_data), 4):
-        chunk = raw_data[i:i+4]
-        if len(chunk) == 4:
-            int_val = struct.unpack('<I', chunk)[0]
-            printint += f"{int_val} "
-            valsint.append(int_val)
-    '''
-
-
     burndamage = getburn(raw_data) # 지속 데미지 출력
     for x in burndamage:
         if x > 9:
@@ -228,14 +238,19 @@ def tryprint(raw_data):
             print('burn : ' + str(x))
 
     damage_list = []
+    extract_list = extractpkt(raw_data)
     for encoded_job in utf16_joblist:
         if encoded_job in raw_data:
             damage_list.extend(get_damages(raw_data, encoded_job))
+        for extract_data in extract_list:
+            damage_list.extend(get_damages(extract_data, encoded_job))
 
     for skill_name, damage in damage_list:
         if damage > 9:
             dmgskill.append(damage)
             print(f"{skill_name} : {damage}")
+
+    
     return
 
 class DamageTrackerApp: #챗지피티 최고
@@ -390,7 +405,8 @@ def process_if_complete():
         reassembled_payload = bytes(full_data)
 
         if valid_segment_count >= 2:
-            print(f"✅ Reassembled {valid_segment_count} segments, length {len(reassembled_payload)} bytes")
+        #    print(f"✅ Reassembled {valid_segment_count} segments, length {len(reassembled_payload)} bytes")
+            ''
 
         packetprocess.put(reassembled_payload)
 
