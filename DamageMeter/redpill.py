@@ -5,7 +5,8 @@
 import tkinter as tk
 from tkinter import font
 from datetime import datetime
-from scapy.all import sniff, IP, Raw, get_if_addr, conf
+from scapy.all import sniff, IP, TCP, Raw, get_if_addr, conf
+
 import re
 import struct
 import threading
@@ -24,28 +25,50 @@ dmgskill = []
 dmgburn = []
 starttime = 0
 
+joblist = [  # 인식 가능한 직업 및 스킬 앞자리 리스트, 추가 필요
+    'RangeDefaultAttack',   # 원거리 기본 공격
+    'MeleeDefaultAttack',   # 근거리 기본 공격
+    'RangeAttack',          # 범위 공격? 뒤에 속성이 따라붙음(Fire, Ice, Poison, Mental...)
 
-
-joblist = [ # 인식 가능한 직업 및 스킬 앞자리 리스트, 추가 필요
-    'RangeDefaultAttack',
-    'MeleeDefaultAttack',
-    'FireMage_',
+    'Elemental',            # 원소 공격
     'Idle',
-    'Elemental_',
-    'GreatSwordWarrior_',
-    'Arbalist_',
-    'ChargingFist_',
-    'Fighter_',
-    'HighMage_',
-    'IceMage_',
-    'SwordMaster_',
-    'NoviceWarrior_',
-    'ExpertWarrior_',
-    'Monk_',
-    'LongBowMan_',
-    'HighArcher_',
-    'Priest_',
+
+    # 전사 계열
+    'ExpertWarrior',        # 전사
+    'NoviceWarrior',        # 전사
+    'GreatSwordWarrior',    # 대검전사
+    'SwordMaster',          # 검술사
+
+    # 궁수 계열
+    'HighArcher',           # 궁수
+    'ExpertArcher'          # 궁수
+    'Arbalist',             # 석궁사수
+    'LongBowMan',           # 장궁병
+    'LongBow'               # 장궁병(윙스큐어, 크래시샷 일부)
+
+    # 마법사 계열
+    'HighMage',             # 마법사
+    'FireMage',             # 화염술사
+    'IceMage',              # 빙결술사
+
+    # 힐러 계열
+    'Healer'                # 힐러
+    'Priest',               # 사제
+    'Monk',                 # 수도사
+
+    # 음유시인 계열
+    'Bard',                 # 음유시인
+    'Dancer',               # 댄서
+    'BattleMusician'        # 악사
+
+    # 도적 계열
+    'HighThief',            # 도적
+    'Fighter',              # 격투가
+    'DualBlades',           # 듀얼블레이드
+
 ]
+
+utf16_joblist = [x.encode('utf-16le') for x in joblist]
 
 blacklist = [
     '_Backdraft_Trail_',
@@ -55,6 +78,9 @@ blacklist = [
     'LoopAI',
     '_Buff_End',
 ]
+
+utf16_blacklist = [x.encode('utf-16le') for x in blacklist]
+
 
 def input_listener():
     global packetprocess
@@ -176,12 +202,14 @@ def get_damages(data: bytes, pattern_bytes) -> list[tuple[str, int]]:
 def tryprint(raw_data):
     global dmgskill
     global dmgburn
-    
-    if len(raw_data) < 24: return # 길이 필터링
-    #if not matchdata(raw_data): return # 헤더 필터링
-    for x in blacklist:
-        if toutf16le(x) in raw_data: return # str 필터링
-        ''
+
+    if len(raw_data) < 24:
+        return  # 길이 필터링
+    # if not matchdata(raw_data): return # 헤더 필터링
+    for encoded_blacklist in utf16_blacklist:
+        if encoded_blacklist in raw_data:
+            return  # str 필터링
+
     # int 변환, hex보다 비교가 쪼끔 쉬움
     '''
     for i in range(0, len(raw_data), 4):
@@ -199,13 +227,15 @@ def tryprint(raw_data):
             dmgburn.append(x)
             print('burn : ' + str(x))
 
-    for x in joblist: # 데미지 출력, 직업 인식
-        if toutf16le(x) in raw_data: 
-            damages = get_damages(raw_data, toutf16le(x))
-            for skill_name, damage in damages:
-                if damage > 9:
-                    dmgskill.append(damage)
-                    print(f"{skill_name} : {damage}")
+    damage_list = []
+    for encoded_job in utf16_joblist:
+        if encoded_job in raw_data:
+            damage_list.extend(get_damages(raw_data, encoded_job))
+
+    for skill_name, damage in damage_list:
+        if damage > 9:
+            dmgskill.append(damage)
+            print(f"{skill_name} : {damage}")
     return
 
 class DamageTrackerApp: #챗지피티 최고
@@ -306,11 +336,68 @@ def sniffpkt():
     print(f"starting tcp port : {PORT}...")
     sniff(filter=f"tcp port {PORT} and dst host {my_ip}", prn=packet_callback, store=0)
 
+
+lock = threading.Lock()
+tcp_segments = []
+
+
 def packet_callback(packet):
-    if Raw in packet:
-        packetprocess.put(packet[Raw].load)
-        #tryprint(packet[Raw].load)
-                
+    if TCP in packet and Raw in packet:
+        seq = packet[TCP].seq
+        payload = bytes(packet[Raw].load)
+
+        with lock:
+            tcp_segments.append((seq, payload))
+
+        if packet[TCP].flags.F or packet[TCP].flags.P:
+            process_if_complete()
+
+
+def process_if_complete():
+    with lock:
+        if not tcp_segments:
+            return  # 수신된 세그먼트가 없음
+
+        tcp_segments.sort()
+
+        full_data = bytearray()
+        expected_seq = None
+        valid_segment_count = 0
+        consumed_until = 0  # 처리한 세그먼트 수
+
+        for i, (seq, data) in enumerate(tcp_segments):
+            if expected_seq is None:
+                expected_seq = seq
+
+            if seq > expected_seq:
+                # 중간에 누락 발생 → 조합 중단, 이후 도착까지 대기
+                break
+
+            elif seq < expected_seq:
+                overlap = expected_seq - seq
+                if overlap >= len(data):
+                    continue  # 전부 중복 → 무시
+                data = data[overlap:]
+
+            full_data.extend(data)
+            expected_seq += len(data)
+            valid_segment_count += 1
+            consumed_until = i + 1
+
+        if not full_data:
+            return  # 유효한 payload 없음 → 처리 안함
+
+        reassembled_payload = bytes(full_data)
+
+        if valid_segment_count >= 2:
+            print(f"✅ Reassembled {valid_segment_count} segments, length {len(reassembled_payload)} bytes")
+
+        packetprocess.put(reassembled_payload)
+
+        # 조합된 부분만 삭제, 나머지는 남겨둠 (다음 시도에서 사용)
+        del tcp_segments[:consumed_until]
+
+
 pktprocess = threading.Thread(target=processor, daemon=True)
 pktprocess.start()
 pktcapinput = threading.Thread(target=sniffpkt, daemon=True)

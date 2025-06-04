@@ -9,7 +9,7 @@
 # 코드 실행 - 스킬 사용 - S 입력 - 데미지 입력 - 패킷 결과 확인 - RE 입력 - 다른 스킬 사용 - 반복
 
 
-from scapy.all import sniff, IP, Raw, get_if_addr, conf
+from scapy.all import sniff, IP, TCP, Raw, get_if_addr, conf
 import re
 from textwrap import wrap
 import struct
@@ -211,11 +211,81 @@ def processor():
         data = packetprocess.get()
         tryprint(data)
 
+
+lock = threading.Lock()
+tcp_segments = []  # 전역 리스트 하나만 사용
+
+
 def packet_callback(packet):
-    if Raw in packet:
-        #print(packet.summary())
-        packetprocess.put(packet[Raw].load)
-        #tryprint(packet[Raw].load)
+    if TCP in packet and Raw in packet:
+        seq = packet[TCP].seq
+        payload = bytes(packet[Raw].load)
+
+        with lock:
+            tcp_segments.append((seq, payload))
+
+        if packet[TCP].flags.F or packet[TCP].flags.P:
+            process_if_complete()
+
+lock = threading.Lock()
+tcp_segments = []  # 전역 리스트 하나만 사용
+
+
+def packet_callback(packet):
+    if TCP in packet and Raw in packet:
+        seq = packet[TCP].seq
+        payload = bytes(packet[Raw].load)
+
+        with lock:
+            tcp_segments.append((seq, payload))
+
+        if packet[TCP].flags.F or packet[TCP].flags.P:
+            process_if_complete()
+
+
+def process_if_complete():
+    with lock:
+        if not tcp_segments:
+            return  # 수신된 세그먼트가 없음
+
+        tcp_segments.sort()
+
+        full_data = bytearray()
+        expected_seq = None
+        valid_segment_count = 0
+        consumed_until = 0  # 처리한 세그먼트 수
+
+        for i, (seq, data) in enumerate(tcp_segments):
+            if expected_seq is None:
+                expected_seq = seq
+
+            if seq > expected_seq:
+                # 중간에 누락 발생 → 조합 중단, 이후 도착까지 대기
+                break
+
+            elif seq < expected_seq:
+                overlap = expected_seq - seq
+                if overlap >= len(data):
+                    continue  # 전부 중복 → 무시
+                data = data[overlap:]
+
+            full_data.extend(data)
+            expected_seq += len(data)
+            valid_segment_count += 1
+            consumed_until = i + 1
+
+        if not full_data:
+            return  # 유효한 payload 없음 → 처리 안함
+
+        reassembled_payload = bytes(full_data)
+
+        if valid_segment_count >= 2:
+            print(f"✅ Reassembled {valid_segment_count} segments, length {len(reassembled_payload)} bytes")
+
+        packetprocess.put(reassembled_payload)
+
+        # ✅ 조합된 부분만 삭제, 나머지는 남겨둠 (다음 시도에서 사용)
+        del tcp_segments[:consumed_until]
                 
 input_thread = threading.Thread(target=input_listener, daemon=True)
 input_thread.start()
