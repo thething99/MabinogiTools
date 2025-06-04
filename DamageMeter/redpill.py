@@ -75,7 +75,7 @@ utf16_joblist = [x.encode('utf-16le') for x in joblist]
 
 blacklist = [
     '_Backdraft_Trail_',
-    'FireStorm_Tie',
+    'Storm_Tier',
     'Script',
     'SkillAI',
     'LoopAI',
@@ -189,9 +189,9 @@ def get_damages(data: bytes, pattern_bytes) -> list[tuple[str, int]]:
             skill_name_bytes = data[skill_name_start:skill_name_end]
             skill_name = skill_name_bytes.decode('utf-16le', errors='ignore')
             
-            damage_bytes = data[skill_name_end:skill_name_end + 2]
-            damage = struct.unpack('<H', damage_bytes)[0]
-            
+            damage_bytes = data[skill_name_end:skill_name_end + 4]
+            #damage = struct.unpack('<I', damage_bytes)[0]
+            damage = int.from_bytes(damage_bytes, byteorder='little')
             results.append((skill_name, damage))
             
             start_pos = skill_name_end + 2
@@ -228,10 +228,11 @@ def tryprint(raw_data):
 
     if len(raw_data) < 24:
         return  # 길이 필터링
-    # if not matchdata(raw_data): return # 헤더 필터링
+    if not matchdata(raw_data): return # 헤더 필터링
     for encoded_blacklist in utf16_blacklist:
         if encoded_blacklist in raw_data:
             return  # str 필터링
+            ''
 
     burndamage = getburn(raw_data) # 지속 데미지 출력
     for x in burndamage:
