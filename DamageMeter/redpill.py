@@ -190,6 +190,10 @@ def get_damages(data: bytes, pattern_bytes) -> list[tuple[str, int]]:
             skill_name = skill_name_bytes.decode('utf-16le', errors='ignore')
             
             damage_bytes = data[skill_name_end:skill_name_end + 4]
+            if damage_bytes[0] == 0x00  and damage_bytes[3] != 0x00:
+                start_pos = pattern_index + len(pattern_bytes)
+                continue
+
             #damage = struct.unpack('<I', damage_bytes)[0]
             damage = int.from_bytes(damage_bytes, byteorder='little')
             results.append((skill_name, damage))
