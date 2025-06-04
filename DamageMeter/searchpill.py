@@ -1,4 +1,4 @@
-#모비노기 패킷 분석 코드 v25.05.26
+#모비노기 패킷 분석 코드 v25.06.04
 # S - 캡처 중지
 # R - 캡처 시작
 # E - 데이터 초기화
@@ -18,6 +18,7 @@ import queue
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 import os
+import brotli
 
 my_ip = get_if_addr(conf.iface)
 
@@ -31,8 +32,8 @@ packets = []
                     
 
 blacklist = [
-    '_Backdraft_Trail_',
-    'FireStorm_Tie',
+#    '_Backdraft_Trail_',
+#    'FireStorm_Tie',
     'Script',
     'SkillAI',
     'LoopAI',
@@ -42,7 +43,7 @@ blacklist = [
 def toutf16le(text):
     return text.encode('utf-16le')
 
-def utf16leprint(hex_bytes, min_chars: int = 2):
+def utf16leprint(hex_bytes, min_chars: int = 3):
     results = []
     rsoffset = 0
     rsdone = False
@@ -114,6 +115,26 @@ def matchdata(data):
     )
     return start_matches
 
+def extractpkt(data: bytes):
+    # 00 80 aa aa aa ea
+    rslts = []
+    pattern = b'\x00\x80\xaa\xaa\xaa\xea'
+    for match in re.finditer(pattern, data, flags=re.DOTALL):
+        match_start = match.start() - 3
+        if match_start - 5 < 0:
+            continue
+        match_len = struct.unpack('<I', data[match_start -5 :match_start-1])[0]
+        if match_len > len(data) - match_start:
+            continue   
+        msegment = data[match_start:match_start + match_len]
+        try:
+            decompress = brotli.decompress(msegment)
+            rslts.append(decompress)
+        except Exception as e:
+            print(f"Decompression error")
+            continue
+    return rslts
+
 def tryprint(raw_data):
     global capture
     global packets
@@ -122,7 +143,7 @@ def tryprint(raw_data):
 
     # 패킷 출력 방식
     printtohex = False
-    printtostr = False
+    printtostr = True
     printtoint = False
 
     filterdata2 = [
@@ -148,11 +169,13 @@ def tryprint(raw_data):
     printint = ''
     valsint = []
     
-    #if len(raw_data) < 24: return # 길이 필터링
-    #if not matchdata(raw_data): return # 헤더 필터링
+    if len(raw_data) < 24: return # 길이 필터링
+    if not matchdata(raw_data): return # 헤더 필터링
     for x in blacklist:
-        #if toutf16le(x) in raw_data: return # str 필터링
+        if toutf16le(x) in raw_data: return # str 필터링
         ''
+
+    print('--------------------------------------------------------')
     # int 변환, hex보다 비교가 쪼끔 쉬움
     '''
     for i in range(0, len(raw_data), 4):
@@ -167,6 +190,8 @@ def tryprint(raw_data):
 
     if printtoint: print(printint)
 
+
+
     utf16list = utf16leprint(raw_data)
     if len(utf16list[0]) != 0 and printtostr:
         print((utf16list[0])) # str 데이터 출력
@@ -174,6 +199,16 @@ def tryprint(raw_data):
     
     if printtohex: print(raw_data.hex(" "))
     packets.append(raw_data)
+
+    extracted = extractpkt(raw_data)
+    if len(extracted) == 0: return
+    print('--Extracted packets: ' + str(len(extracted)))
+    for exdata in extracted:
+        eutf16list = utf16leprint(exdata)
+        if len(eutf16list[0]) != 0 and printtostr:
+            print((eutf16list[0])) # str 데이터 출력
+        if printtohex: print(exdata.hex(" "))
+        packets.append(exdata)
 
 def input_listener():
     global capture
@@ -280,7 +315,8 @@ def process_if_complete():
         reassembled_payload = bytes(full_data)
 
         if valid_segment_count >= 2:
-            print(f"✅ Reassembled {valid_segment_count} segments, length {len(reassembled_payload)} bytes")
+        #    print(f"✅ Reassembled {valid_segment_count} segments, length {len(reassembled_payload)} bytes")
+            ''
 
         packetprocess.put(reassembled_payload)
 
