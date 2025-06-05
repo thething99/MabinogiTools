@@ -20,7 +20,7 @@ capture_lock = threading.Lock()
 
 my_ip = get_if_addr(conf.iface)
 
-ver = 'v25.06.04'
+ver = 'v25.06.05'
 
 PORT = 16000
 
@@ -133,7 +133,7 @@ class DamageTrackerApp: #챗지피티 최고
         global running
         self.root = root
         self.root.title("Redpill beta " + ver)
-        self.root.geometry("300x400")
+        self.root.geometry("300x500")
         self.root.resizable(False, False)
 
         # 폰트
@@ -146,7 +146,8 @@ class DamageTrackerApp: #챗지피티 최고
         self.dmg2_label = tk.Label(root, text="지속 피해")
         self.min_dmg_label = tk.Label(root, text="최소 데미지", font=bold_font)
         self.max_dmg_label = tk.Label(root, text="최대 데미지", font=bold_font)
-        self.avg_dmg_label = tk.Label(root, text="총합 데미지", font=big_bold_font)
+        self.full_dmg_label = tk.Label(root, text="총합 데미지", font=big_bold_font)
+        self.dps_label = tk.Label(root, text="DPS", font=big_bold_font)
 
         # 버튼
         self.start_button = tk.Button(root, text="Start", command=self.start, width=40)
@@ -166,7 +167,8 @@ class DamageTrackerApp: #챗지피티 최고
             self.dmg2_label,
             self.min_dmg_label,
             self.max_dmg_label,
-            self.avg_dmg_label,
+            self.full_dmg_label,
+            self.dps_label,
             self.start_button,
             self.stop_button,
             self.reset_button,
@@ -214,9 +216,16 @@ class DamageTrackerApp: #챗지피티 최고
             self.dmg2_label.config(text=f"지속 : {sum(burndmgs)}")
 
             if len(skilldmgs) != 0:
+                sumdmg = sum(skilldmgs) + sum(burndmgs)
+                sectime = calctime.total_seconds()
+                if sectime == 0:    
+                    dpss = sumdmg
+                else:
+                    dpss = round(sumdmg / calctime.total_seconds(),2)
                 self.min_dmg_label.config(text=f"최소 : {min(skilldmgs)}")
                 self.max_dmg_label.config(text=f"최대 : {max(skilldmgs)}")
-                self.avg_dmg_label.config(text=f"총합 : {(sum(skilldmgs) + sum(burndmgs))}")
+                self.full_dmg_label.config(text=f"총합 : {(sum(skilldmgs) + sum(burndmgs))}")
+                self.dps_label.config(text=f"DPS : {dpss}")
 
             time.sleep(0.2)
 
@@ -247,7 +256,8 @@ class DamageTrackerApp: #챗지피티 최고
         self.dmg2_label.config(text="지속 : 0")
         self.min_dmg_label.config(text="최소 : 0")
         self.max_dmg_label.config(text="최대 : 0")
-        self.avg_dmg_label.config(text="총합 : 0")
+        self.full_dmg_label.config(text="총합 : 0")
+        self.dps_label.config(text="DPS : 0")
     
 
 def processor():
