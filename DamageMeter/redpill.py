@@ -156,6 +156,9 @@ class DamageTrackerApp: #챗지피티 최고
         self.chkvar = tk.BooleanVar(value=False)
         chk = tk.Checkbutton(self.root, text='단일 타겟(가장 먼저 맞은 타겟)', variable=self.chkvar)
 
+        self.totop = tk.BooleanVar(value=False)
+        topcheck = tk.Checkbutton(root, text="항상 위에 고정", variable=self.totop, command=self.toggle_always_on_top)
+        
         # 배치
         widgets = [
             self.time_label,
@@ -168,11 +171,14 @@ class DamageTrackerApp: #챗지피티 최고
             self.stop_button,
             self.reset_button,
             chk,
+            topcheck,
         ]
         for widget in widgets:
             widget.pack(pady=5)
 
         running = False
+    def toggle_always_on_top(self):
+        root.attributes('-topmost', self.totop.get())
 
     def update_damages(self):
         global dmgskill
