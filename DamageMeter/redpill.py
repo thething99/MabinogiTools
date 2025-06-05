@@ -215,7 +215,11 @@ class DamageTrackerApp: #챗지피티 최고
             time.sleep(0.2)
 
     def start(self):
+        global dmgskill
+        global dmgburn
         global running
+        dmgskill = []
+        dmgburn = []
         if not running:
             running = True
             threading.Thread(target=self.update_damages, daemon=True).start()
