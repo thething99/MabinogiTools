@@ -1,4 +1,4 @@
-#모비노기 데미지 프린터 v25.06.04
+#모비노기 데미지 프린터 v25.06.05
 #아직 부족한 부분이 많습니다. 이슈 발생시 제보 주세요.
 
 
@@ -27,62 +27,8 @@ PORT = 16000
 dmgskill = []
 dmgburn = []
 starttime = 0
-
-joblist = [  # 인식 가능한 직업 및 스킬 앞자리 리스트, 추가 필요
-    'RangeDefaultAttack',   # 원거리 기본 공격
-    'MeleeDefaultAttack',   # 근거리 기본 공격
-    'RangeAttack',          # 범위 공격? 뒤에 속성이 따라붙음(Fire, Ice, Poison, Mental...)
-
-    'Elemental',            # 원소 공격
-    'Idle',
-
-    # 전사 계열
-    'ExpertWarrior',        # 전사
-    'NoviceWarrior',        # 전사
-    'GreatSwordWarrior',    # 대검전사
-    'SwordMaster',          # 검술사
-
-    # 궁수 계열
-    'HighArcher',           # 궁수
-    'ExpertArcher',          # 궁수
-    'Arbalist',             # 석궁사수
-    'LongBowMan',           # 장궁병
-    'LongBow',               # 장궁병(윙스큐어, 크래시샷 일부)
-
-    # 마법사 계열
-    'HighMage',             # 마법사
-    'FireMage',             # 화염술사
-    'IceMage',              # 빙결술사
-
-    # 힐러 계열
-    'Healer',                # 힐러
-    'Priest',               # 사제
-    'Monk',                 # 수도사
-
-    # 음유시인 계열
-    'Bard',                 # 음유시인
-    'Dancer',               # 댄서
-    'BattleMusician',        # 악사
-
-    # 도적 계열
-    'HighThief',            # 도적
-    'Fighter',              # 격투가
-    'DualBlades',           # 듀얼블레이드
-
-]
-
-utf16_joblist = [x.encode('utf-16le') for x in joblist]
-
-blacklist = [
-    '_Backdraft_Trail_',
-    'Storm_Tier',
-    'Script',
-    'SkillAI',
-    'LoopAI',
-    '_Buff_End',
-]
-
-utf16_blacklist = [x.encode('utf-16le') for x in blacklist]
+running = False
+dmgtype = bytes.fromhex('03 05 00 00')  # 데미지 타입, 게임 업데이트시 갱신 필요
 
 
 def input_listener():
@@ -95,50 +41,6 @@ def input_listener():
                     os._exit(0)
         except EOFError:
             break
-
-def toutf16le(text):
-    return text.encode('utf-16le')
-
-def utf16leprint(hex_bytes, min_chars: int = 4):
-    results = []
-    rsoffset = 0
-    rsdone = False
-    i = 0
-    while i < len(hex_bytes) - min_chars * 2:
-        try:
-            chunk = hex_bytes[i:i + min_chars * 2]
-            decoded = chunk.decode('utf-16le')
-
-            if not re.fullmatch(r"[a-zA-Z0-9가-힣 _\-\.\:/()\[\]]+", decoded):
-                i += 2
-                continue
-
-            for j in range(i + min_chars * 2, len(hex_bytes), 2):
-                try:
-                    extended = hex_bytes[i:j].decode('utf-16le')
-                    if not re.fullmatch(r"[a-zA-Z0-9가-힣 _\-\.\:/()\[\]]+", extended):
-                        break
-                    if not rsdone: rsoffset = j
-                    decoded = extended
-                except:
-                    print('err')
-                    break
-            rsdone = True
-            results.append(decoded)
-            i = j 
-        except:
-            i += 2
-
-    return [results,rsoffset]
-
-def bytetoint(hex_bytes, offset = 0):
-    if len(hex_bytes) + 4 < offset:
-        return 0
-    chunk = hex_bytes[offset:offset+4]
-    #print(chunk.hex(" "))
-    if len(chunk) == 4:
-        int_val = struct.unpack('<I', chunk)[0]
-        return int_val
     
 def matchdata(data):
     matches = (
@@ -147,71 +49,41 @@ def matchdata(data):
     )
     return matches
 
-def getburn(data: bytes):
-    # 00 00 00 03 05 00 00 43 00 00 00 00 + 20
-    pattern = b'\x00\x00\x00\x03\x05\x00\x00\x43\x00\x00\x00\x00'
+def findpattern(data: bytes, pattern: bytes) -> list:
+    positions = []
+    pattern_len = len(pattern)
+    i = 0
+    while i <= len(data) - pattern_len:
+        if data[i:i+pattern_len] == pattern:
+            positions.append(i)
+        i += 1
+    return positions
+
+def get_damages(data: bytes):
     damages = []
-    for match in re.finditer(pattern, data, flags=re.DOTALL):
-        matchend = match.end() + 20
-        if len(data) >= matchend + 4:
-            vbytes = data[matchend:matchend+4]
-            if vbytes[1] == 0x00 and vbytes[2] != 0x00 and vbytes[3] == 0x00: continue
-            value = int.from_bytes(vbytes, byteorder='little')
-            if value > 99: 
-                damages.append(value)
-    if len(damages) > 0: return damages
-    return [0]
-
-def get_damages(data: bytes, pattern_bytes) -> list[tuple[str, int]]:
-    results = []
-    start_pos = 0
-    
-    while True:
-        pattern_index = data.find(pattern_bytes, start_pos)
-        
-        if pattern_index == -1:
-            break
-        
-        if pattern_index < 4:
-            start_pos = pattern_index + len(pattern_bytes)
-            continue
-        
-        try:
-            skill_name_length = struct.unpack('<I', data[pattern_index-4:pattern_index])[0]
-            
-            skill_name_start = pattern_index
-            skill_name_end = skill_name_start + skill_name_length
-            
-            if skill_name_end + 2 > len(data):
-                start_pos = pattern_index + len(pattern_bytes)
-                continue
-            
-            skill_name_bytes = data[skill_name_start:skill_name_end]
-            skill_name = skill_name_bytes.decode('utf-16le', errors='ignore')
-            
-            damage_bytes = data[skill_name_end:skill_name_end + 4]
-            if damage_bytes[0] == 0x00  and damage_bytes[3] != 0x00:
-                start_pos = pattern_index + len(pattern_bytes)
-                continue
-
-            #damage = struct.unpack('<I', damage_bytes)[0]
-            damage = int.from_bytes(damage_bytes, byteorder='little')
-            results.append((skill_name, damage))
-            
-            start_pos = skill_name_end + 2
-            
-        except Exception as e:
-            start_pos = pattern_index + len(pattern_bytes)
-            continue
-    
-    return results
+    spoints = findpattern(data, dmgtype)
+    for spoint in spoints:
+        dtype = data[spoint + 4]
+        if dtype == 0: continue
+        if dtype == 67: #지속피해, 0x43
+            target = int.from_bytes(data[spoint+17:spoint+21], byteorder='little')
+            damage = int.from_bytes(data[spoint+29:spoint+33], byteorder='little')
+            damages.append([damage,target,dtype,'DOT'])
+        else:
+            target = int.from_bytes(data[spoint+17:spoint+21], byteorder='little')
+            skilllen = int.from_bytes(data[spoint + 25:spoint + 29], byteorder='little')
+            if skilllen > 99 or skilllen < 2: continue
+            skillname = data[spoint + 29:spoint + 29 + skilllen].decode('utf-16le')
+            damage = int.from_bytes(data[spoint + 29 + skilllen:spoint + 29 + skilllen + 4], byteorder='little')
+            if damage < 2 or damage > 100000000: continue
+            damages.append([damage, target, dtype , skillname])
+    return damages
 
 def extractpkt(data: bytes):
-    # 00 80 aa aa aa ea
     rslts = []
-    pattern = b'\x00\x80\xaa\xaa\xaa\xea'
-    for match in re.finditer(pattern, data, flags=re.DOTALL):
-        match_start = match.start() - 3
+    spoints = findpattern(data, bytes.fromhex('00 80 aa aa aa ea'))
+    for spoint in spoints:
+        match_start = spoint - 3
         if match_start - 5 < 0:
             continue
         match_len = struct.unpack('<I', data[match_start -5 :match_start-1])[0]
@@ -224,6 +96,7 @@ def extractpkt(data: bytes):
         except Exception as e:
             print(f"Decompression error")
             continue
+
     return rslts
 
 def tryprint(raw_data):
@@ -233,35 +106,31 @@ def tryprint(raw_data):
     if len(raw_data) < 24:
         return  # 길이 필터링
     if not matchdata(raw_data): return # 헤더 필터링
-    for encoded_blacklist in utf16_blacklist:
-        if encoded_blacklist in raw_data:
-            return  # str 필터링
-            ''
-
-    burndamage = getburn(raw_data) # 지속 데미지 출력
-    for x in burndamage:
-        if x > 9:
-            dmgburn.append(x)
-            print('burn : ' + str(x))
-
-    damage_list = []
-    extract_list = extractpkt(raw_data)
-    for encoded_job in utf16_joblist:
-        if encoded_job in raw_data:
-            damage_list.extend(get_damages(raw_data, encoded_job))
-        for extract_data in extract_list:
-            damage_list.extend(get_damages(extract_data, encoded_job))
-
-    for skill_name, damage in damage_list:
-        if damage > 9:
-            dmgskill.append(damage)
-            print(f"{skill_name} : {damage}")
-
     
-    return
+    if dmgtype not in raw_data: return
+
+    damages = get_damages(raw_data)
+    for damage, target, dtype, skillname in damages:
+        if dtype == 67:
+            dmgburn.append([damage, target])
+        else:
+            dmgskill.append([damage, target])
+        print(f"target : {target} / {skillname} / dmg : {damage}")
+
+    extract_list = extractpkt(raw_data)
+    for data in extract_list:
+        bdamages = get_damages(data)
+        for damage, target, dtype, skillname in bdamages:
+            if dtype == 67:
+                dmgburn.append([damage, target])
+            else:
+                dmgskill.append([damage, target])
+            print(f"target : {target} / {skillname} / dmg : {damage}")
+
 
 class DamageTrackerApp: #챗지피티 최고
     def __init__(self, root):
+        global running
         self.root = root
         self.root.title("Redpill beta " + ver)
         self.root.geometry("300x400")
@@ -277,12 +146,15 @@ class DamageTrackerApp: #챗지피티 최고
         self.dmg2_label = tk.Label(root, text="지속 피해")
         self.min_dmg_label = tk.Label(root, text="최소 데미지", font=bold_font)
         self.max_dmg_label = tk.Label(root, text="최대 데미지", font=bold_font)
-        self.avg_dmg_label = tk.Label(root, text="평균 데미지", font=big_bold_font)
+        self.avg_dmg_label = tk.Label(root, text="총합 데미지", font=big_bold_font)
 
         # 버튼
         self.start_button = tk.Button(root, text="Start", command=self.start, width=40)
         self.stop_button = tk.Button(root, text="Stop", command=self.stop, width=40)
         self.reset_button = tk.Button(root, text="Reset", command=self.reset, width=40)
+
+        self.chkvar = tk.BooleanVar(value=False)
+        chk = tk.Checkbutton(self.root, text='단일 타겟(가장 먼저 맞은 타겟)', variable=self.chkvar)
 
         # 배치
         widgets = [
@@ -295,55 +167,77 @@ class DamageTrackerApp: #챗지피티 최고
             self.start_button,
             self.stop_button,
             self.reset_button,
+            chk,
         ]
         for widget in widgets:
             widget.pack(pady=5)
 
-        self.running = False
+        running = False
 
     def update_damages(self):
         global dmgskill
         global dmgburn
         global starttime
-        while self.running:
+        global running
+        while running:
             if len(dmgskill) == 0 and len(dmgburn) == 0: continue
             if starttime == 0:
                 starttime = datetime.now()
+            skilldmgs = []
+            burndmgs = []
+            entity = 0
+            for dmg in dmgskill:
+                if self.chkvar.get():
+                    if entity == 0:
+                        entity = dmg[1]
+                    if dmg[1] == entity:
+                        skilldmgs.append(dmg[0])
+                else:
+                    skilldmgs.append(dmg[0])
+            for dmg in dmgburn:
+                if self.chkvar.get():
+                    if dmg[1] == entity:
+                        burndmgs.append(dmg[0])
+                else:
+                    burndmgs.append(dmg[0])
             calctime = datetime.now() - starttime
             estime = str(calctime).split('.')[0]
             self.time_label.config(text=f"Time: {estime}")
 
-            self.dmg1_label.config(text=f"스킬 : {sum(dmgskill)}")
-            self.dmg2_label.config(text=f"지속 : {sum(dmgburn)}")
+            self.dmg1_label.config(text=f"스킬 : {sum(skilldmgs)}")
+            self.dmg2_label.config(text=f"지속 : {sum(burndmgs)}")
 
-            if len(dmgskill) != 0:
-                self.min_dmg_label.config(text=f"최소 : {min(dmgskill)}")
-                self.max_dmg_label.config(text=f"최대 : {max(dmgskill)}")
-                self.avg_dmg_label.config(text=f"평균: {round(sum(dmgskill) / len(dmgskill),2)}")
+            if len(skilldmgs) != 0:
+                self.min_dmg_label.config(text=f"최소 : {min(skilldmgs)}")
+                self.max_dmg_label.config(text=f"최대 : {max(skilldmgs)}")
+                self.avg_dmg_label.config(text=f"총합 : {(sum(skilldmgs) + sum(burndmgs))}")
 
             time.sleep(0.2)
 
     def start(self):
-        if not self.running:
-            self.running = True
+        global running
+        if not running:
+            running = True
             threading.Thread(target=self.update_damages, daemon=True).start()
 
     def stop(self):
-        self.running = False
+        global running
+        running = False
 
     def reset(self):
         global dmgskill
         global dmgburn
         global starttime
+        global running
         dmgskill = []
         dmgburn = []
         starttime = 0
-        self.running = False
+        running = False
         self.dmg1_label.config(text="스킬 : 0")
         self.dmg2_label.config(text="지속 : 0")
         self.min_dmg_label.config(text="최소 : 0")
         self.max_dmg_label.config(text="최대 : 0")
-        self.avg_dmg_label.config(text="평균 : 0")
+        self.avg_dmg_label.config(text="총합 : 0")
     
 
 def processor():
