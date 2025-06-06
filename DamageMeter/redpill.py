@@ -1,7 +1,7 @@
-#
-#모비노기 데미지 프린터  Fork version by tthing  v25.06.05-2 
+#모비노기 데미지 프린터 Fork by tthing 25.06.07  < 25.06.05
 
-
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 import tkinter as tk
 from tkinter import font
@@ -30,10 +30,8 @@ dmgburn = []
 starttime = 0
 running = False
 dmgtype = b'\x03\x05\x00\x00' 
-print(dmgtype) # 데미지 타입, 게임 업데이트시 갱신 필요
 #dmgtype = bytes.fromhex('09 04 00 00')  # 16 04 
-print( bytes.fromhex('ac 04 00 00 00 00 00 00 00'))
-
+print(bytes.fromhex('ff ff ff ff ffffffff'))
 
 def input_listener():
     global packetprocess
@@ -80,9 +78,8 @@ def find_nonzero_triple(data: bytes):
     triplets = [
         (7, 15, 23),
         (8, 16, 24),
-        (9, 17, 25),
-        (10, 18, 26),
-        (9, 18, 29)
+        (9, 17, 25),        
+        # (9, 17, 29)
     ]
     for t in triplets:
         if all(data[i] != 0 for i in t):
@@ -91,7 +88,7 @@ def find_nonzero_triple(data: bytes):
 ###
 
 def get_damages(data: bytes):
-    damages = []   
+    #damages = []   
     spoints = findpattern(data, dmgtype)
 
     for spoint in spoints:
@@ -108,30 +105,37 @@ def get_damages(data: bytes):
         
         dtype = sdata[4] 
         if dtype == 0: continue
-
-        result = find_nonzero_triple(sdata)
-        if result:
-            tarpos, attpos, skillpos = result            
-        else:
-            print(sdata.hex())
-            continue
-
-        target = int.from_bytes(sdata[tarpos-1 : tarpos+3], byteorder='little')
-        attacker = int.from_bytes(sdata[attpos-1 : attpos+3], byteorder='little')        
-                
+               
         if dtype == 67: 
             skillname = 'DOT' 
-            dmgloc = skillpos
+            dmgloc = 29     # skillpos
+            attpos = 9
+            tarpos = 17
         else:
+            results = find_nonzero_triple(sdata)
+            if results:
+                attpos, tarpos, skillpos = results            
+            else:
+                print(sdata.hex())
+                continue
+
             skilllen = sdata[skillpos] 
-            skillname = sdata[skillpos+4 : skillpos+4+skilllen].decode('utf-16LE', errors='ignore')        
+            skillname = sdata[skillpos+4 : skillpos+4+skilllen].decode('utf-16le', errors='ignore')        
             dmgloc = skillpos + 4 + skilllen
-        damage = int.from_bytes(sdata[dmgloc:dmgloc+7], byteorder='little')  
+
+        target = int.from_bytes(sdata[tarpos-1 : tarpos+3], byteorder='little')
+        attacker = int.from_bytes(sdata[attpos-1 : attpos+3], byteorder='little')  
+        
+        if sdata[dmgloc:dmgloc+7] == b'\xff\xff\xff\xff\xff\xff\xff\xff':
+            continue
+        damage = int.from_bytes(sdata[dmgloc:dmgloc+8], byteorder='little')  
         jclass = skillname[:4]
 
-        damages.append([damage, target, dtype , skillname, attacker,jclass])
+        return damage, target, dtype, skillname, attacker,jclass
+    
+        #damages.append([damage, target, dtype , skillname, attacker,jclass])
 
-    return damages
+    #return damages
 
 """
 def extractpkt(data: bytes):
@@ -169,20 +173,20 @@ def tryprint(raw_data):
     if dmgtype not in raw_data: return
     ###    
     if not is_complete_data(raw_data):
-        print("Incomplete data received, buffering...")
+        #print("Incomplete data received, buffering...")
         global_buffer += raw_data
         return
     raw_data = global_buffer or raw_data
        
     ###
-    damages = get_damages(raw_data)
-    if damages:
-        for damage, target, dtype, skillname, attacker, jclass in damages:
-            if dtype == 67:
-                dmgburn.append([damage, target])
-            else:
-                dmgskill.append([damage, target])
-            print(f"{jclass}-{attacker} > {target} : {skillname} : {dtype} : {damage}")
+    damage, target, dtype, skillname, attacker, jclass = get_damages(raw_data)
+    if damage:
+        #for damage, target, dtype, skillname, attacker, jclass in damages:
+        if dtype == 67:
+            dmgburn.append([damage, target])
+        else:
+            dmgskill.append([damage, target])
+        print(f"{jclass}-{attacker} > {target} : {skillname} : {dtype} : {damage}")
     """   
     extract_list = extractpkt(raw_data)
     for data in extract_list:
@@ -326,7 +330,48 @@ class DamageTrackerApp: #챗지피티 최고
         self.max_dmg_label.config(text="최대 : 0")
         self.full_dmg_label.config(text="총합 : 0")
         self.dps_label.config(text="DPS : 0")
-    
+
+
+
+class DamageGraphApp:
+    def __init__(self):
+        self.fig, self.ax = plt.subplots()
+        self.skill_dmg = []
+        self.burn_dmg = []
+        self.timestamps = []
+
+        # 그래프 초기 설정
+        self.ax.set_title("실시간 데미지 그래프")
+        self.ax.set_xlabel("시간 (초)")
+        self.ax.set_ylabel("데미지")
+        self.skill_line, = self.ax.plot([], [], label="스킬 데미지", color="blue")
+        self.burn_line, = self.ax.plot([], [], label="지속 데미지", color="red")
+        self.ax.legend()
+
+    def update_graph(self, frame):
+        # 데미지 데이터 업데이트
+        global dmgskill, dmgburn, starttime
+        if len(dmgskill) > 0 or len(dmgburn) > 0:
+            current_time = (datetime.now() - starttime).total_seconds()
+            self.timestamps.append(current_time)
+            self.skill_dmg.append(sum(d[0] for d in dmgskill))
+            self.burn_dmg.append(sum(d[0] for d in dmgburn))
+
+            # 그래프 데이터 업데이트
+            self.skill_line.set_data(self.timestamps, self.skill_dmg)
+            self.burn_line.set_data(self.timestamps, self.burn_dmg)
+
+            # 축 범위 설정
+            self.ax.set_xlim(max(0, current_time - 30), current_time + 5)
+            self.ax.set_ylim(0, max(max(self.skill_dmg, default=0), max(self.burn_dmg, default=0)) + 100)
+
+        return self.skill_line, self.burn_line
+
+    def start(self):
+        # 실시간 그래프 애니메이션 시작
+        self.animation = FuncAnimation(self.fig, self.update_graph, interval=500)
+        plt.show()
+
 
 def processor():
     while True:
@@ -402,16 +447,17 @@ def process_if_complete():
         # 조합된 부분만 삭제, 나머지는 남겨둠 (다음 시도에서 사용)
         del tcp_segments[:consumed_until]
 
-
 pktprocess = threading.Thread(target=processor, daemon=True)
 pktprocess.start()
 pktcapinput = threading.Thread(target=sniffpkt, daemon=True)
 pktcapinput.start()
-
-
-
+# DamageGraphApp 인스턴스 생성 및 실행
 if __name__ == "__main__":
     root = tk.Tk()
     app = DamageTrackerApp(root)
+
+    # # 그래프 앱 실행
+    # graph_app = DamageGraphApp()
+    # threading.Thread(target=graph_app.start, daemon=True).start()
+
     root.mainloop()
-#sniff(filter=f"tcp port {PORT}", prn=packet_callback, store=0)
