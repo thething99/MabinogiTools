@@ -1,5 +1,6 @@
-#모비노기 데미지 프린터 v25.06.05
-#아직 부족한 부분이 많습니다. 이슈 발생시 제보 주세요.
+#
+#모비노기 데미지 프린터  Fork version by tthing  v25.06.05-2 
+
 
 
 import tkinter as tk
@@ -28,7 +29,10 @@ dmgskill = []
 dmgburn = []
 starttime = 0
 running = False
-dmgtype = bytes.fromhex('03 05 00 00')  # 데미지 타입, 게임 업데이트시 갱신 필요
+dmgtype = b'\x03\x05\x00\x00' 
+print(dmgtype) # 데미지 타입, 게임 업데이트시 갱신 필요
+#dmgtype = bytes.fromhex('09 04 00 00')  # 16 04 
+print( bytes.fromhex('ac 04 00 00 00 00 00 00 00'))
 
 
 def input_listener():
@@ -48,6 +52,18 @@ def matchdata(data):
         data[2:9] == b'\x00\x00\x00\x00\x00\x00\x00'
     )
     return matches
+###
+def is_complete_data(data: bytes):
+    matches = (        
+        data[-9:] == b'\xac\x04\x00\x00\x00\x00\x00\x00\x00'
+    )
+    return matches
+
+def is_combat_data(data: bytes):
+    if b'x03\x05\x00\x00' in data:
+        return True
+    return False
+
 
 def findpattern(data: bytes, pattern: bytes) -> list:
     positions = []
@@ -59,26 +75,65 @@ def findpattern(data: bytes, pattern: bytes) -> list:
         i += 1
     return positions
 
+#### tt-mod
+def find_nonzero_triple(data: bytes):
+    triplets = [
+        (7, 15, 23),
+        (8, 16, 24),
+        (9, 17, 25),
+        (10, 18, 26),
+        (9, 18, 29)
+    ]
+    for t in triplets:
+        if all(data[i] != 0 for i in t):
+            return t
+    return None
+###
+
 def get_damages(data: bytes):
-    damages = []
+    damages = []   
     spoints = findpattern(data, dmgtype)
+
     for spoint in spoints:
-        dtype = data[spoint + 4]
+
+        sbytes = int.from_bytes(data[spoint+4:spoint+8], byteorder='little') 
+
+        if data[spoint+13:spoint+18] == b'\x80\xaa\xaa\xaa\xea':
+            sdata = data[spoint + 9 : spoint + 9 + sbytes]
+            cdata = brotli.decompress(sdata)
+            sdata = data[spoint:spoint+8] + cdata
+            #print(f"merged data : { sdata.hex()}")
+        else:            
+            sdata = data[spoint : spoint + 40 + sbytes]         
+        
+        dtype = sdata[4] 
         if dtype == 0: continue
-        if dtype == 67: #지속피해, 0x43
-            target = int.from_bytes(data[spoint+17:spoint+21], byteorder='little')
-            damage = int.from_bytes(data[spoint+29:spoint+33], byteorder='little')
-            damages.append([damage,target,dtype,'DOT'])
+
+        result = find_nonzero_triple(sdata)
+        if result:
+            tarpos, attpos, skillpos = result            
         else:
-            target = int.from_bytes(data[spoint+17:spoint+21], byteorder='little')
-            skilllen = int.from_bytes(data[spoint + 25:spoint + 29], byteorder='little')
-            if skilllen > 99 or skilllen < 2: continue
-            skillname = data[spoint + 29:spoint + 29 + skilllen].decode('utf-16le')
-            damage = int.from_bytes(data[spoint + 29 + skilllen:spoint + 29 + skilllen + 4], byteorder='little')
-            if damage < 2 or damage > 100000000: continue
-            damages.append([damage, target, dtype , skillname])
+            print(sdata.hex())
+            continue
+
+        target = int.from_bytes(sdata[tarpos-1 : tarpos+3], byteorder='little')
+        attacker = int.from_bytes(sdata[attpos-1 : attpos+3], byteorder='little')        
+                
+        if dtype == 67: 
+            skillname = 'DOT' 
+            dmgloc = skillpos
+        else:
+            skilllen = sdata[skillpos] 
+            skillname = sdata[skillpos+4 : skillpos+4+skilllen].decode('utf-16LE', errors='ignore')        
+            dmgloc = skillpos + 4 + skilllen
+        damage = int.from_bytes(sdata[dmgloc:dmgloc+7], byteorder='little')  
+        jclass = skillname[:4]
+
+        damages.append([damage, target, dtype , skillname, attacker,jclass])
+
     return damages
 
+"""
 def extractpkt(data: bytes):
     rslts = []
     spoints = findpattern(data, bytes.fromhex('00 80 aa aa aa ea'))
@@ -98,25 +153,37 @@ def extractpkt(data: bytes):
             continue
 
     return rslts
-
+"""
+###
+global_buffer = b''
+###
 def tryprint(raw_data):
     global dmgskill
     global dmgburn
+    ###
+    global global_buffer
 
     if len(raw_data) < 24:
         return  # 길이 필터링
     if not matchdata(raw_data): return # 헤더 필터링
-    
     if dmgtype not in raw_data: return
-
+    ###    
+    if not is_complete_data(raw_data):
+        print("Incomplete data received, buffering...")
+        global_buffer += raw_data
+        return
+    raw_data = global_buffer or raw_data
+       
+    ###
     damages = get_damages(raw_data)
-    for damage, target, dtype, skillname in damages:
-        if dtype == 67:
-            dmgburn.append([damage, target])
-        else:
-            dmgskill.append([damage, target])
-        print(f"target : {target} / {skillname} / dmg : {damage}")
-
+    if damages:
+        for damage, target, dtype, skillname, attacker, jclass in damages:
+            if dtype == 67:
+                dmgburn.append([damage, target])
+            else:
+                dmgskill.append([damage, target])
+            print(f"{jclass}-{attacker} > {target} : {skillname} : {dtype} : {damage}")
+    """   
     extract_list = extractpkt(raw_data)
     for data in extract_list:
         bdamages = get_damages(data)
@@ -126,6 +193,7 @@ def tryprint(raw_data):
             else:
                 dmgskill.append([damage, target])
             print(f"target : {target} / {skillname} / dmg : {damage}")
+    """ 
 
 
 class DamageTrackerApp: #챗지피티 최고
